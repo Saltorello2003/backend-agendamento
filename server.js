@@ -55,7 +55,7 @@ async function initDB() {
     // Criar o usuário Admin padrão se não existir
     const res = await pool.query('SELECT * FROM usuarios WHERE email = $1', ['saltorello2003@gmail.com']);
     if (res.rows.length === 0) {
-      const senhaHash = await bcrypt.hash('123456', 10);
+      const senhaHash = await bcrypt.hash('admin123', 10);
       await pool.query('INSERT INTO usuarios (email, senha, role) VALUES ($1, $2, $3)', [
         'saltorello2003@gmail.com',
         senhaHash,
@@ -71,9 +71,15 @@ initDB();
 
 // ------------------- ROTAS DA API -------------------
 
-// 1. Rota de Login Admin
+// 1. Rota de Login Admin (Aceita 'senha' ou 'password')
 app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, senha, password } = req.body;
+  const pass = senha || password;
+
+  if (!email || !pass) {
+    return res.status(400).json({ message: 'E-mail e senha são obrigatórios' });
+  }
+
   try {
     const result = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
     if (result.rows.length === 0) {
@@ -81,7 +87,7 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const usuario = result.rows[0];
-    const senhaValida = await bcrypt.compare(password, usuario.senha);
+    const senhaValida = await bcrypt.compare(pass, usuario.senha);
     if (!senhaValida) {
       return res.status(400).json({ message: 'E-mail ou senha incorretos' });
     }
@@ -89,6 +95,7 @@ app.post('/api/auth/login', async (req, res) => {
     const token = jwt.sign({ id: usuario.id, email: usuario.email }, JWT_SECRET, { expiresIn: '8h' });
     res.json({ token, user: { email: usuario.email } });
   } catch (err) {
+    console.error('Erro no login:', err);
     res.status(500).json({ message: 'Erro interno no servidor' });
   }
 });
@@ -103,6 +110,7 @@ app.post('/api/agendamentos', async (req, res) => {
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
+    console.error('Erro ao criar agendamento:', err);
     res.status(500).json({ message: 'Erro ao criar agendamento' });
   }
 });
@@ -113,6 +121,7 @@ app.get('/api/agendamentos', autenticarToken, async (req, res) => {
     const result = await pool.query('SELECT * FROM agendamentos ORDER BY data ASC, horario ASC');
     res.json(result.rows);
   } catch (err) {
+    console.error('Erro ao buscar agendamentos:', err);
     res.status(500).json({ message: 'Erro ao buscar agendamentos' });
   }
 });
